@@ -1,8 +1,9 @@
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView } from 'react-native'
-import React, { useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { theme } from '../theme'
+import { debounce } from 'lodash'
 
 import Ionicons from 'react-native-vector-icons/Ionicons'
 import AntDesign from 'react-native-vector-icons/AntDesign'
@@ -13,13 +14,42 @@ import Wind from '../assets/svg/wind.svg'
 import Drop from '../assets/svg/drop.svg'
 import Clock from '../assets/svg/clock.svg'
 
+import { fetchLocations, fetchWeatherForecast } from '../api/weather.js'
+
+import { weatherImages } from '../constants/index';
+
 export default function HomeScreen() {
   const [showSearch, toggleSearch] = useState(false);
-  const [locations, setLocations] = useState([1,2,3]);
+  const [locations, setLocations] = useState([]);
+  const [weather, setWeather] = useState({});
+  
+  const textInputRef = useRef(null); 
 
   const selectLocation = (location) => {
     console.log('Location: ', location);
+    setLocations([]);
+    textInputRef.current.clear();
+    toggleSearch(false);
+
+    fetchWeatherForecast({
+      cityName: location.name,
+      days: '7'
+    }).then(data => {
+      setWeather(data);
+    })
   }
+
+  const getLocation = value => {
+    if (value.length > 2)
+    {
+      fetchLocations({cityName: value}).then(data => {
+        setLocations(data);
+      })
+    }
+  }
+
+  const handleTextDebounce = useCallback(debounce(getLocation, 1200), []);
+  const {current, location} = weather;
 
   return (
     <SafeAreaView>
@@ -32,7 +62,10 @@ export default function HomeScreen() {
             showSearch ? (
               <TextInput placeholder='Search location' 
                 placeholderTextColor={'black'}
-                style={styles.searchInput}/>
+                style={styles.searchInput}
+                onChangeText={getLocation}
+                ref={textInputRef}
+              />
             ):null
           }
 
@@ -58,7 +91,7 @@ export default function HomeScreen() {
                       onPress={() => selectLocation(location)}>
                       <Ionicons name='location-outline' style={styles.locationIcon}/>
 
-                      <Text>HoChiMinh, Vietnam</Text>
+                      <Text>{location?.name}, {location?.country}</Text>
                     </TouchableOpacity>
                   )
                 })
@@ -70,29 +103,29 @@ export default function HomeScreen() {
         {/* Location and weather symbol */}
         <View style={styles.forecastSection}>
           <Text style={styles.locationText}>
-            Ho Chi Minh, Vietnam 
+            {location?.name}, {location?.country}
           </Text>
 
-          <Sunny width={200} height={208}/>
+          {weatherImages[current?.condition?.text]} 
         </View>
 
         {/* Celsius and weather forecast text */}
         <View style={styles.statusContainer}>
-            <Text style={styles.celsiusText}>21°</Text>
+            <Text style={styles.celsiusText}>{current?.temp_c}°</Text>
 
-            <Text style={styles.weatherText}>Sunny</Text>
+            <Text style={styles.weatherText}>{current?.condition?.text}</Text>
         </View>
 
         {/* Other information */}
         <View style={styles.otherStatusContainer}>
           <View style={styles.statusItem}>
             <Wind width={30} height={30}/>
-            <Text style={styles.statusText}>4.3 km</Text>
+            <Text style={styles.statusText}>{current?.wind_kph} km</Text>
           </View>
 
           <View style={styles.statusItem}>
             <Drop width={30} height={30}/>
-            <Text style={styles.statusText}>15%</Text>
+            <Text style={styles.statusText}>{current?.humidity} %</Text>
           </View>
 
           <View style={styles.statusItem}>
@@ -111,6 +144,18 @@ export default function HomeScreen() {
           <ScrollView horizontal
             contentContainerStyle={styles.calendarContainer}
             showsHorizontalScrollIndicator={false}>
+            <View style={styles.calendar}>
+              <Text style={styles.dayText}>Monday</Text>
+              <Sunny width={60} height={60}/>
+              <Text style={styles.degreeText}>21°</Text>
+            </View>
+
+            <View style={styles.calendar}>
+              <Text style={styles.dayText}>Monday</Text>
+              <Sunny width={60} height={60}/>
+              <Text style={styles.degreeText}>21°</Text>
+            </View>
+
             <View style={styles.calendar}>
               <Text style={styles.dayText}>Monday</Text>
               <Sunny width={60} height={60}/>
@@ -219,7 +264,7 @@ const styles = StyleSheet.create({
   },
 
   weatherText: {
-    fontSize: "40%",
+    fontSize: "35%",
     fontWeight: "300"
   },
 
