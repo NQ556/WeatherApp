@@ -1,5 +1,5 @@
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView } from 'react-native'
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { theme } from '../theme'
@@ -12,11 +12,12 @@ import Sunny from '../assets/svg/sunny.svg'
 
 import Wind from '../assets/svg/wind.svg'
 import Drop from '../assets/svg/drop.svg'
-import Clock from '../assets/svg/clock.svg'
+import Rays from '../assets/svg/rays.svg'
 
 import { fetchLocations, fetchWeatherForecast } from '../api/weather.js'
 
 import { weatherImages } from '../constants/index';
+import { getData, storeData } from '../utils/asyncStorage'
 
 export default function HomeScreen() {
   const [showSearch, toggleSearch] = useState(false);
@@ -26,7 +27,6 @@ export default function HomeScreen() {
   const textInputRef = useRef(null); 
 
   const selectLocation = (location) => {
-    console.log('Location: ', location);
     setLocations([]);
     textInputRef.current.clear();
     toggleSearch(false);
@@ -36,6 +36,7 @@ export default function HomeScreen() {
       days: '7'
     }).then(data => {
       setWeather(data);
+      storeData('city', location.name);
     })
   }
 
@@ -48,8 +49,32 @@ export default function HomeScreen() {
     }
   }
 
+  const fetchCurrentWeather = async () => {
+    let currentCity = await getData('city');
+    let cityName = 'Ho Chi Minh City';
+
+    if (currentCity)
+    {
+      cityName = currentCity;
+    }
+
+    fetchWeatherForecast({
+      cityName: cityName,
+      days: '7'
+    }).then(data => {
+      setWeather(data);
+    })
+  }
+
+  useEffect(() => {
+    fetchCurrentWeather();
+  }, [])
+
   const handleTextDebounce = useCallback(debounce(getLocation, 1200), []);
   const {current, location} = weather;
+
+  const weatherCondition = current?.condition?.text;
+  const WeatherComponent = weatherImages[weatherCondition];
 
   return (
     <SafeAreaView>
@@ -106,7 +131,13 @@ export default function HomeScreen() {
             {location?.name}, {location?.country}
           </Text>
 
-          {weatherImages[current?.condition?.text]} 
+          {weatherCondition && (
+            <View>
+              {WeatherComponent && (
+                <WeatherComponent width={200} height={208}/>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Celsius and weather forecast text */}
@@ -129,8 +160,8 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.statusItem}>
-            <Clock width={30} height={30}/>
-            <Text style={styles.statusText}>10:00 AM</Text>
+            <Rays width={35} height={35}/>
+            <Text style={styles.statusText}>{current?.uv}</Text>
           </View>
         </View>
 
@@ -144,47 +175,33 @@ export default function HomeScreen() {
           <ScrollView horizontal
             contentContainerStyle={styles.calendarContainer}
             showsHorizontalScrollIndicator={false}>
-            <View style={styles.calendar}>
-              <Text style={styles.dayText}>Monday</Text>
-              <Sunny width={60} height={60}/>
-              <Text style={styles.degreeText}>21°</Text>
-            </View>
+            {
+              weather?.forecast?.forecastday?.map((item, index) => {
+                let weatherCondition_2 = item?.day?.condition?.text;
+                let WeatherComponent_2 = weatherImages[weatherCondition_2];
 
-            <View style={styles.calendar}>
-              <Text style={styles.dayText}>Monday</Text>
-              <Sunny width={60} height={60}/>
-              <Text style={styles.degreeText}>21°</Text>
-            </View>
+                let date = new Date(item.date);
+                let dateStr = date.toLocaleDateString('en-US', {weekday: 'short'});
+                dateStr = dateStr.split(',')[0]
 
-            <View style={styles.calendar}>
-              <Text style={styles.dayText}>Monday</Text>
-              <Sunny width={60} height={60}/>
-              <Text style={styles.degreeText}>21°</Text>
-            </View>
+                return (
+                  <View style={styles.calendar}
+                    key={index}>
+                    <Text style={styles.dayText}>{dateStr}</Text>
 
-            <View style={styles.calendar}>
-              <Text style={styles.dayText}>Monday</Text>
-              <Sunny width={60} height={60}/>
-              <Text style={styles.degreeText}>21°</Text>
-            </View>
+                    {weatherCondition_2 && (
+                      <View>
+                        {WeatherComponent_2 && (
+                          <WeatherComponent_2 width={60} height={60}/>
+                        )}
+                      </View>
+                    )}  
 
-            <View style={styles.calendar}>
-              <Text style={styles.dayText}>Monday</Text>
-              <Sunny width={60} height={60}/>
-              <Text style={styles.degreeText}>21°</Text>
-            </View>
-
-            <View style={styles.calendar}>
-              <Text style={styles.dayText}>Monday</Text>
-              <Sunny width={60} height={60}/>
-              <Text style={styles.degreeText}>21°</Text>
-            </View>
-
-            <View style={styles.calendar}>
-              <Text style={styles.dayText}>Monday</Text>
-              <Sunny width={60} height={60}/>
-              <Text style={styles.degreeText}>21°</Text>
-            </View>
+                    <Text style={styles.degreeText}>{item?.day?.avgtemp_c}°</Text>
+                  </View>
+                )
+              })
+            }
           </ScrollView>
         </View>
       </SafeAreaView>
@@ -265,7 +282,8 @@ const styles = StyleSheet.create({
 
   weatherText: {
     fontSize: "35%",
-    fontWeight: "300"
+    fontWeight: "300",
+    textAlign: 'center'
   },
 
   otherStatusContainer: {
